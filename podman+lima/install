@@ -1,0 +1,43 @@
+#!/bin/sh
+
+BASEDIR=$(dirname $0)
+cd ${BASEDIR}
+
+brew install docker docker-credential-helper --formula
+brew install lima
+brew install podman-desktop
+
+# docker.yaml 파일 같이 첨부 
+mkdir $HOME/.podman+lima
+cp ./config/docker-rootful.yaml $HOME/.podman+lima/ 
+cp ./src/start_lima.sh $HOME/.podman+lima/ 
+
+echo -e '\n' | limactl start --name=docker $HOME/.podman+lima/docker-rootful.yaml
+docker context create lima-docker --docker "host=unix://$HOME/.lima/docker/sock/docker.sock"
+docker context use lima-docker
+
+# 심볼릭 링크 생성
+# /var/run 은 가변인자라서 매번 삭제된다..?
+sudo ln -sf $HOME/.lima/docker/sock/docker.sock /var/run/docker.sock
+
+# docker-start 명령어 생성
+# lima vm instance start
+echo "Setting 'docker-start' command to start docker engine"
+echo "alias docker-start='sh $HOME/.podman+lima/start_lima.sh'" >> ~/.zshrc
+echo "alias docker-start='sh $HOME/.podman+lima/start_lima.sh'" >> ~/.bash_profile
+
+# docker-edit 명령어 생성
+# text editor를 통해 lima vm instance 수정
+echo "alias docker-edit='limactl stop docker;limactl edit docker'" >> ~/.zshrc
+echo "alias docker-edit='limactl stop docker;limactl edit docker'" >> ~/.bash_profile
+
+# Minkube 설치 여부 확인
+echo "Install minikube and set driver to installed docker? [y/n]"
+read ANSWER
+
+if [ ${ANSWER} == "y" -o ${ANSWER} == "Y" ];then
+    echo "Installing minikube and setting driver to installed docker..."
+    brew install minikube
+    minikube start --driver=docker --container-runtime=containerd
+    # Minikube 용량 되는지 확인
+fi
